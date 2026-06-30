@@ -1,0 +1,11 @@
+# Dependencias
+node_modules/
+
+# Salidas del CLI
+safevibe_output/
+
+# Secretos y configuración local
+config.json
+
+# Archivos del sistema
+.DS_Store
