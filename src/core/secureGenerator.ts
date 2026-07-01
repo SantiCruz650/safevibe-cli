@@ -21,7 +21,14 @@ export class SecureGenerator {
 
   private extractCode(aiResponse: string): string {
     const codeBlockMatch = aiResponse.match(/```(?:html|javascript|typescript|python|py)?\s*\n([\s\S]*?)```/);
-    if (codeBlockMatch && codeMatch[1]) return codeBlockMatch[1].trim();
+    if (codeBlockMatch && codeBlockMatch[1]) return codeBlockMatch[1].trim();
+    
+    const startIndex = aiResponse.indexOf('<!DOCTYPE html>');
+    if (startIndex !== -1) {
+      const endIndex = aiResponse.lastIndexOf('</html>');
+      return aiResponse.substring(startIndex, endIndex !== -1 ? endIndex + 7 : undefined).trim();
+    }
+    
     return aiResponse.trim();
   }
 
@@ -42,24 +49,22 @@ export class SecureGenerator {
     if (isSimulation) {
       extension = '.html';
       langKey = 'html';
-      systemInstruction = 'Eres un motor de simulacion fisica 3D web de nivel cientifico. Tu salida DEBE ser SOLO codigo HTML.\n' +
+      systemInstruction = 'Eres un motor de simulacion fisica 3D web de nivel cientifico. Tu salida DEBE ser SOLO codigo HTML en un solo archivo.\n' +
         '- Incluye Three.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n' +
         '- Incluye Cannon.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>\n' +
         '- Incluye OrbitControls: <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>\n' +
-        'REGLAS CIENTIFICAS OBLIGATORIAS (MKS Y ANTIBUGS):\n' +
-        '1. UNIDADES: 1 unidad = 1 metro. Masas en kg.\n' +
-        '2. MUNDO FISICO: \n' +
-        '   const world = new CANNON.World(); world.gravity.set(0, -9.82, 0);\n' +
-        '   world.allowSleep = true; world.solver.iterations = 20;\n' +
-        '3. MATERIALES EXPLICTOS: Crea CANNON.Material para suelo y objetos. Crea CANNON.ContactMaterial con friccion y restitucion exactas. Anadelos al world.\n' +
-        '4. SUELO: CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: groundMaterial }). Rotado -Math.PI/2. Visual con THREE.DoubleSide y THREE.GridHelper(100, 100).\n' +
-        '5. BUCLE DE TIEMPO FIJO (CRITICO): \n' +
-        '   const fixedTimeStep = 1 / 60; const maxSubSteps = 10; const clock = new THREE.Clock();\n' +
-        '   En requestAnimationFrame: const deltaTime = clock.getDelta(); world.step(fixedTimeStep, deltaTime, maxSubSteps);\n' +
-        '6. DORMIR (SLEEPING): body.allowSleep = true; body.sleepSpeedLimit = 0.1; body.sleepTimeLimit = 1.0;\n' +
-        '7. PENDULOS/CUERDAS: Usa new CANNON.PointToPointConstraint. Visual usa THREE.CylinderGeometry actualizado en el bucle con quaternion.setFromUnitVectors.\n' +
-        '8. HUD: div estilizado en linea, agregado al DOM antes del bucle. Actualiza innerText con velocidad, altura y energia en cada frame.\n' +
-        '9. SYNC: mesh.position.copy(body.position); mesh.quaternion.copy(body.quaternion); controls.update(); renderer.render();\n' +
+        'REGLAS CIENTIFICAS Y VISUALES OBLIGATORIAS:\n' +
+        '1. MUNDO FISICO: const world = new CANNON.World(); world.gravity.set(0, -9.82, 0); world.allowSleep = true; world.solver.iterations = 20;\n' +
+        '2. ESCALA Y CAMARA: 1 unidad = 1 metro. La camara DEBE estar en position.set(0, 5, 15) para poder ver objetos grandes sin estar "dentro" de ellos.\n' +
+        '3. MATERIALES VISUALES (CRITICO): Usa SIEMPRE THREE.MeshBasicMaterial para los objetos en movimiento (pelotas, pesos) para garantizar que se vean a color aunque las luces fallen. Usa colores solidos (0x00ff00, 0xff0000).\n' +
+        '4. MATERIALES FISICOS: Crea CANNON.Material y CANNON.ContactMaterial con friccion y restitucion. Anadelos al world.\n' +
+        '5. SUELO: Plano estatico (mass: 0) rotado -Math.PI/2. Visual con THREE.DoubleSide y THREE.GridHelper(30, 30).\n' +
+        '6. BUCLE DE TIEMPO FIJO: const fixedTimeStep = 1 / 60; const clock = new THREE.Clock(); \n' +
+        '   En requestAnimationFrame: const deltaTime = clock.getDelta(); world.step(fixedTimeStep, deltaTime, 10);\n' +
+        '7. PENDULOS/CUERDAS (CRITICO): Usa new CANNON.DistanceConstraint(anchorBody, ballBody, distance). Anadelo con world.addConstraint(). Visual usa THREE.Line con BufferGeometry. En el bucle, actualiza los puntos (positions array) de la linea para que conecte el ancla y la pelota.\n' +
+        '8. HUD: div creado con document.createElement, estilos en linea (position absolute, top 10px, left 10px, color white, backgroundColor rgba(0,0,0,0.7)). AGREGALO al DOM con document.body.appendChild ANTES del bucle. \n' +
+        '9. SYNC: mesh.position.copy(body.position); controls.update(); renderer.render();\n' +
+        '- NUNCA uses import ni export. Variables globales THREE y CANNON.\n' +
         '- CERO texto fuera del codigo HTML.';
     } else {
       extension = langChoice === 'py' ? '.py' : '.ts';
