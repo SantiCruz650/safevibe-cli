@@ -55,14 +55,20 @@ export class SecureGenerator {
         '- Incluye OrbitControls: <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>\n' +
         'REGLAS CIENTIFICAS Y VISUALES OBLIGATORIAS:\n' +
         '1. MUNDO FISICO: const world = new CANNON.World(); world.gravity.set(0, -9.82, 0); world.allowSleep = true; world.solver.iterations = 20;\n' +
-        '2. ESCALA Y CAMARA: 1 unidad = 1 metro. La camara DEBE estar en position.set(0, 5, 15) para poder ver objetos grandes sin estar "dentro" de ellos.\n' +
-        '3. MATERIALES VISUALES (CRITICO): Usa SIEMPRE THREE.MeshBasicMaterial para los objetos en movimiento (pelotas, pesos) para garantizar que se vean a color aunque las luces fallen. Usa colores solidos (0x00ff00, 0xff0000).\n' +
-        '4. MATERIALES FISICOS: Crea CANNON.Material y CANNON.ContactMaterial con friccion y restitucion. Anadelos al world.\n' +
+        '2. ESCALA Y CAMARA: 1 unidad = 1 metro. La camara DEBE estar en position.set(0, 5, 15).\n' +
+        '3. MATERIALES VISUALES: Usa SIEMPRE THREE.MeshBasicMaterial para los objetos en movimiento.\n' +
+        '4. MATERIALES FISICOS: Crea CANNON.Material y CANNON.ContactMaterial con friccion y restitucion.\n' +
         '5. SUELO: Plano estatico (mass: 0) rotado -Math.PI/2. Visual con THREE.DoubleSide y THREE.GridHelper(30, 30).\n' +
         '6. BUCLE DE TIEMPO FIJO: const fixedTimeStep = 1 / 60; const clock = new THREE.Clock(); \n' +
         '   En requestAnimationFrame: const deltaTime = clock.getDelta(); world.step(fixedTimeStep, deltaTime, 10);\n' +
-        '7. PENDULOS/CUERDAS (CRITICO): Usa new CANNON.DistanceConstraint(anchorBody, ballBody, distance). Anadelo con world.addConstraint(). Visual usa THREE.Line con BufferGeometry. En el bucle, actualiza los puntos (positions array) de la linea para que conecte el ancla y la pelota.\n' +
-        '8. HUD: div creado con document.createElement, estilos en linea (position absolute, top 10px, left 10px, color white, backgroundColor rgba(0,0,0,0.7)). AGREGALO al DOM con document.body.appendChild ANTES del bucle. \n' +
+        '7. PENDULOS/CUERDAS: Usa new CANNON.DistanceConstraint(anchorBody, ballBody, distance). Visual usa THREE.Line con BufferGeometry.\n' +
+        '   ANTI-BUG (CRITICO): Para actualizar la linea en el bucle, usa const positions = line.geometry.attributes.position.array; Y LUEGO asigna positions[0] = anchorBody.position.x; positions[1] = ... NUNCA uses positions = valor;\n' +
+        '8. TELEMETRIA HUD (CRITICO): div creado con document.createElement, estilos en linea, agregado al DOM con document.body.appendChild.\n' +
+        '   En el bucle actualiza innerText con: \n' +
+        '   - Altura (m): ballBody.position.y\n' +
+        '   - Velocidad Lineal (m/s): ballBody.velocity.length()\n' +
+        '   - Velocidad Angular (rad/s): ballBody.velocity.length() / distanciaCuerda\n' +
+        '   - Tension Cuerda (N): (masa * 9.82 * (ballBody.position.y / alturaAncla)) + (masa * ballBody.velocity.lengthSquared() / distanciaCuerda)\n' +
         '9. SYNC: mesh.position.copy(body.position); controls.update(); renderer.render();\n' +
         '- NUNCA uses import ni export. Variables globales THREE y CANNON.\n' +
         '- CERO texto fuera del codigo HTML.';
