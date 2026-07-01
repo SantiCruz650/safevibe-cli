@@ -11,7 +11,8 @@ export class ValidatorRouter {
     this.validators = new Map();
     this.register('.ts', new TypescriptValidator());
     this.register('.py', new PythonValidator());
-    this.register('.html', new HtmlValidator()); // Nuevo validador anti-pereza
+    this.register('.html', new HtmlValidator());
+    this.register('.js', new HtmlValidator()); // Usamos el mismo validador para JS puro
   }
 
   private register(extension: string, validator: IValidator) {
