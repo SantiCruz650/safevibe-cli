@@ -21,7 +21,7 @@ export class SecureGenerator {
 
   private extractCode(aiResponse: string): string {
     const codeBlockMatch = aiResponse.match(/```(?:html|javascript|typescript|python|py)?\s*\n([\s\S]*?)```/);
-    if (codeBlockMatch && codeBlockMatch[1]) return codeBlockMatch[1].trim();
+    if (codeBlockMatch && codeMatch[1]) return codeBlockMatch[1].trim();
     return aiResponse.trim();
   }
 
@@ -42,30 +42,30 @@ export class SecureGenerator {
     if (isSimulation) {
       extension = '.html';
       langKey = 'html';
-      systemInstruction = 'Eres un motor de simulacion fisica 3D web. Tu salida DEBE ser SOLO codigo HTML puro en un solo archivo.\n' +
-        'REGLAS ESTRICTAS DE SIMULACION:\n' +
+      systemInstruction = 'Eres un motor de simulacion fisica 3D web de nivel cientifico. Tu salida DEBE ser SOLO codigo HTML.\n' +
         '- Incluye Three.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>\n' +
         '- Incluye Cannon.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>\n' +
         '- Incluye OrbitControls: <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>\n' +
-        '- NUNCA uses import ni export.\n' +
-        'ARQUITECTURA OBLIGATORIA (ANTI-BUGS):\n' +
-        '1. Escena, Camara (PerspectiveCamera en (0, 10, 20)) y Renderer.\n' +
-        '2. LUCES: AmbientLight y DirectionalLight.\n' +
-        '3. FISICA: const world = new CANNON.World(); world.gravity.set(0, -9.82, 0);\n' +
-        '4. REBOTE GLOBAL (CRITICO): Justo despues de world.gravity, escribe: world.defaultContactMaterial.restitution = 0.8; world.defaultContactMaterial.friction = 0.1;\n' +
-        '5. SUELO FISICO: const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() }); groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2); world.addBody(groundBody);\n' +
-        '6. SUELO VISUAL: Usa new THREE.PlaneGeometry(100, 100) con material MeshStandardMaterial que OBLIGATORIAMENTE tenga { side: THREE.DoubleSide }. Rotalo -Math.PI/2 en X. Añade tambien un THREE.GridHelper(100, 100) en y=0.\n' +
-        '7. OBJETO: Esfera visual en THREE y CANNON.Body (Sphere) con masa 2. Posicion inicial en (0, 10, 0).\n' +
-        '8. CAMARA: const controls = new THREE.OrbitControls(camera, renderer.domElement);\n' +
-        '9. HUD (CRITICO): Crea un div con document.createElement. Estilizado EN LINEA (position absolute, top 10px, left 10px, color white, backgroundColor rgba(0,0,0,0.7)). AGREGALO al DOM con document.body.appendChild(hudDiv) ANTES del bucle. \n' +
-        '   En el bucle actualiza: hudDiv.innerText = "Velocidad: " + (ballBody.velocity.length()).toFixed(2) + " m/s\\nAltura: " + ballBody.position.y.toFixed(2) + " m\\nEnergia: " + (0.5 * 2 * ballBody.velocity.lengthSquared()).toFixed(2) + " J";\n' +
-        '10. BUCLE: requestAnimationFrame. Llama a world.step(1/60). Copia posiciones (ballMesh.position.copy(ballBody.position)). Llama a controls.update(). Llama a renderer.render(scene, camera).\n' +
+        'REGLAS CIENTIFICAS OBLIGATORIAS (MKS Y ANTIBUGS):\n' +
+        '1. UNIDADES: 1 unidad = 1 metro. Masas en kg.\n' +
+        '2. MUNDO FISICO: \n' +
+        '   const world = new CANNON.World(); world.gravity.set(0, -9.82, 0);\n' +
+        '   world.allowSleep = true; world.solver.iterations = 20;\n' +
+        '3. MATERIALES EXPLICTOS: Crea CANNON.Material para suelo y objetos. Crea CANNON.ContactMaterial con friccion y restitucion exactas. Anadelos al world.\n' +
+        '4. SUELO: CANNON.Body({ mass: 0, shape: new CANNON.Plane(), material: groundMaterial }). Rotado -Math.PI/2. Visual con THREE.DoubleSide y THREE.GridHelper(100, 100).\n' +
+        '5. BUCLE DE TIEMPO FIJO (CRITICO): \n' +
+        '   const fixedTimeStep = 1 / 60; const maxSubSteps = 10; const clock = new THREE.Clock();\n' +
+        '   En requestAnimationFrame: const deltaTime = clock.getDelta(); world.step(fixedTimeStep, deltaTime, maxSubSteps);\n' +
+        '6. DORMIR (SLEEPING): body.allowSleep = true; body.sleepSpeedLimit = 0.1; body.sleepTimeLimit = 1.0;\n' +
+        '7. PENDULOS/CUERDAS: Usa new CANNON.PointToPointConstraint. Visual usa THREE.CylinderGeometry actualizado en el bucle con quaternion.setFromUnitVectors.\n' +
+        '8. HUD: div estilizado en linea, agregado al DOM antes del bucle. Actualiza innerText con velocidad, altura y energia en cada frame.\n' +
+        '9. SYNC: mesh.position.copy(body.position); mesh.quaternion.copy(body.quaternion); controls.update(); renderer.render();\n' +
         '- CERO texto fuera del codigo HTML.';
     } else {
       extension = langChoice === 'py' ? '.py' : '.ts';
       langKey = langChoice === 'py' ? 'python' : 'typescript';
       if (langChoice === 'py') {
-        systemInstruction = 'Eres un interprete de Python 3. Tu salida DEBE ser SOLO codigo Python puro.\nREGLAS ABSOLUTAS:\n- CERO texto, cero explicaciones, cero marcadores de bloque.\n- Usa type hints.\n- EVITA dependencias externas.';
+        systemInstruction = 'Eres un interprete de Python 3. Tu salida DEBE ser SOLO codigo Python puro.\nREGLAS ABSOLUTAS:\n- CERO texto, cero explicaciones.\n- Usa type hints.\n- EVITA dependencias externas.';
       } else {
         systemInstruction = 'Eres un compilador de TypeScript. Tu salida DEBE ser SOLO codigo TypeScript puro.\nREGLAS ABSOLUTAS:\n- NUNCA uses la palabra any.\n- Asigna tipos explicitos.\n- CERO texto, cero explicaciones.\n- EVITA dependencias externas.';
       }
