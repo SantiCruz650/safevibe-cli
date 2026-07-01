@@ -2,15 +2,16 @@ import path from 'node:path';
 import type { IValidator, ValidationResult } from './types.js';
 import { TypescriptValidator } from './typescriptValidator.js';
 import { PythonValidator } from './pythonValidator.js';
+import { HtmlValidator } from './htmlValidator.js';
 
 export class ValidatorRouter {
   private validators: Map<string, IValidator>;
 
   constructor() {
     this.validators = new Map();
-    // Registramos los lenguajes soportados
     this.register('.ts', new TypescriptValidator());
     this.register('.py', new PythonValidator());
+    this.register('.html', new HtmlValidator()); // Nuevo validador anti-pereza
   }
 
   private register(extension: string, validator: IValidator) {
