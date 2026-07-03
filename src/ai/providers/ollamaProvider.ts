@@ -9,7 +9,7 @@ export class OllamaProvider implements AIProvider {
     this.model = model;
   }
 
-  async sendPrompt(systemPrompt: string, userPrompt: string): Promise<string> {
+  async sendPrompt(systemPrompt: string, userPrompt: string, imageBase64?: string, mimeType?: string): Promise<string> {
     try {
       const response = await fetch(this.baseUrl, {
         method: 'POST',

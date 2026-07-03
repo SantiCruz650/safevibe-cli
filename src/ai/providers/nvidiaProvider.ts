@@ -12,7 +12,7 @@ export class NvidiaProvider implements AIProvider {
     this.model = model;
   }
 
-  async sendPrompt(systemPrompt: string, userPrompt: string): Promise<string> {
+  async sendPrompt(systemPrompt: string, userPrompt: string, imageBase64?: string, mimeType?: string): Promise<string> {
     try {
       // USAMOS FETCH NATIVO EN LUGAR DE AXIOS PARA AHORRAR RAM EN TU CHROMEBOOK
       const response = await fetch(this.baseUrl, {

@@ -10,15 +10,20 @@ export class AIManager {
 
     switch (config.ai.provider) {
       case 'groq-cloud':
-        // Si en el futuro cambias a otra API, solo cambias la URL y el modelo aquí.
         this.provider = new StandardProvider(
           config.ai.apiKey!,
           'https://api.groq.com/openai/v1/chat/completions', // URL de Groq
           config.ai.model
         );
         break;
+      case 'anthropic':
+        const { AnthropicProvider } = await import('./providers/anthropicProvider.js');
+        this.provider = new AnthropicProvider(
+          config.ai.apiKey!,
+          config.ai.model
+        );
+        break;
       case 'ollama-local':
-        // Nota: Ollama tiene su propio formato, por eso tiene su propio proveedor
         const { OllamaProvider } = await import('./providers/ollamaProvider.js');
         this.provider = new OllamaProvider(config.ai.model);
         break;
@@ -27,8 +32,8 @@ export class AIManager {
     }
   }
 
-  async ask(systemPrompt: string, userPrompt: string): Promise<string> {
+  async ask(systemPrompt: string, userPrompt: string, imageBase64?: string, mimeType?: string): Promise<string> {
     if (!this.provider) await this.initialize();
-    return this.provider!.sendPrompt(systemPrompt, userPrompt);
+    return this.provider!.sendPrompt(systemPrompt, userPrompt, imageBase64, mimeType);
   }
 }

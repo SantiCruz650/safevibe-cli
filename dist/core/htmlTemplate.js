@@ -1,5 +1,5 @@
-export function generateHtmlBoilerplate(jsCode: string): string {
-  return `<!DOCTYPE html>
+export function generateHtmlBoilerplate(jsCode) {
+    return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">

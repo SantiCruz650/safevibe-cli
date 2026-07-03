@@ -5,9 +5,10 @@ import path from 'node:path';
 // Esto actúa como un "contrato". Si algo no cumple esto, TypeScript lanza un error.
 export interface SafeVibeConfig {
   ai: {
-    provider: 'openai' | 'anthropic' | 'ollama-local';
+    provider: 'openai' | 'anthropic' | 'ollama-local' | 'groq-cloud';
     model: string;
     apiKey?: string; // Opcional porque Ollama local no necesita clave
+    anthropicApiKey?: string; // Clave para Claude 3.5 Sonnet (Vision)
   };
   voice: {
     enabled: boolean;

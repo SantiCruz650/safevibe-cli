@@ -14,7 +14,7 @@ export class StandardProvider implements AIProvider {
     this.model = model;
   }
 
-  async sendPrompt(systemPrompt: string, userPrompt: string): Promise<string> {
+  async sendPrompt(systemPrompt: string, userPrompt: string, imageBase64?: string, mimeType?: string): Promise<string> {
     try {
       const response = await fetch(this.baseUrl, {
         method: 'POST',
@@ -30,7 +30,7 @@ export class StandardProvider implements AIProvider {
             { role: 'user', content: userPrompt }
           ],
           temperature: 0.5,
-          max_tokens: 1024,
+          max_tokens: 4096,
           stream: false
         })
       });
