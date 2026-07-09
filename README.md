@@ -17,8 +17,13 @@ El código generado nunca llega directo a tus manos. Pasa por un sandbox tempora
 **1. Análisis estático de seguridad**
 Bloquea `eval()`, `exec()`, `os.system()`, `child_process.exec()`, `shell=True`, `dangerouslySetInnerHTML` y `@ts-ignore` (engañar al compilador no es arreglar el código).
 
-**2. Verificación de dependencias reales**
+**2. Verificación de dependencias**
+
 Cada paquete importado se consulta contra el registro de **npm** o **PyPI** en tiempo real. Si el LLM alucinó una librería, se detecta antes de que llegue a tu `package.json`.
+
+Pero existir en el registro no basta. El ataque real es más sutil: un atacante registra `reqeusts` (una transposición de `requests`) o `lodahs` (de `lodash`), publica un payload malicioso, y espera a que un LLM alucine ese nombre y alguien lo instale. Se llama *slopsquatting*.
+
+SafeVibe compara cada dependencia contra una lista de paquetes populares usando **distancia de Damerau-Levenshtein**, que cuenta la transposición de dos letras adyacentes como una sola edición — el typo más común en este tipo de ataque. Distancia 1 se bloquea; distancia 2 genera una advertencia. Las variantes legítimas (`lodash-es`, `fs-extra-promise`) y los paquetes con scope (`@types/react`) se excluyen para evitar falsos positivos.
 
 Esta capa importa más de lo que parece. Cuando un modelo inventa un nombre de paquete, un atacante puede registrarlo y esperar a que alguien lo instale — se llama *slopsquatting*. Verificar contra el registro lo corta de raíz.
 
@@ -110,13 +115,23 @@ No es el producto — es la prueba de que la validación llega hasta el resultad
 
 ---
 
-## Roadmap
+## Tests
 
-**Detección de typosquatting.** Verificar que un paquete exista no basta: `reqeusts` no existe, pero `requsts` podría estar registrado por un atacante. Comparar contra nombres populares por distancia de edición.
+```bash
+npm test
+```
+
+Suite de regresión sobre el `SecurityAnalyzer`: verifica que bloquee `eval` y `os.system`, que atrape typosquatting y paquetes alucinados, y que deje pasar dependencias legítimas.
+
+---
+
+## Roadmap
 
 **Distribución vía `npx safevibe`.** Clonar un repo es demasiada fricción. La herramienta debe correr sin instalar nada.
 
-**Tests de regresión.** El `SecurityAnalyzer` necesita una suite que verifique lo obvio: que bloquee `eval`, que atrape un paquete inventado, que deje pasar uno legítimo. Sin esto, cada cambio es una apuesta.
+**Ampliar la cobertura de tests.** La suite actual cubre el `SecurityAnalyzer`. Faltan los validadores estructurales y el pipeline completo.
+
+**Integración continua.** Correr `npm test` en cada push con GitHub Actions.
 
 ---
 
