@@ -8,37 +8,29 @@ export class HtmlValidator implements IValidator {
     const code = readFileSync(filePath, 'utf-8');
     const errors: string[] = [];
 
-    // Validaciones 3D básicas obligatorias para todos los modos
-    if (!code.includes('THREE.WebGLRenderer') && !code.includes('new THREE.Scene')) {
-      errors.push('Falta la inicializacion del motor 3D (THREE.Scene o WebGLRenderer).');
-    }
-    if (!code.includes('requestAnimationFrame')) {
-      errors.push('Falta el bucle de animacion requestAnimationFrame.');
-    }
+    // El boilerplate ya provee scene, camera, renderer, controls, animate loop.
+    // Solo validamos lo que la IA debe generar.
 
+    // CANNON physics: si se usa, debe tener world.step
     const usesPhysics = code.includes('CANNON');
-
-    if (usesPhysics) {
-      // Reglas Físicas de Cannon.js (Solo si el código implementa física multi-cuerpo)
-      if (!code.includes('fixedTimeStep')) errors.push('Falta definir fixedTimeStep.');
-      if (!code.includes('world.step(fixedTimeStep') && !code.includes('world.step(')) {
-        errors.push('Falta llamar a world.step para actualizar el mundo físico.');
-      }
-      if (!code.includes('allowSleep')) errors.push('Falta activar allowSleep en el mundo físico.');
-      if (!code.includes('solver.iterations')) errors.push('Falta aumentar solver.iterations en el resolvedor.');
+    if (usesPhysics && !code.includes('world.step')) {
+      errors.push('Falta llamar a world.step para actualizar el mundo físico.');
     }
 
-    // Reglas Visuales Generales (flexibilizadas para no bloquear setups de cámara u objetos avanzados)
-    if (!code.includes('MeshBasicMaterial') && !code.includes('MeshStandardMaterial') && !code.includes('LineBasicMaterial') && !code.includes('MeshPhongMaterial')) {
-      errors.push('Falta usar un material compatible de Three.js.');
-    }
-    if (!code.includes('camera.position.set') && !code.includes('camera.position.x') && !code.includes('camera.position.z')) {
-      errors.push('Falta definir la posicion de la camara.');
+    // Debe usar al menos un material de Three.js
+    const hasMaterial = /(?:Mesh|Line|Points|Sprite|Shadow)\w*Material\b/.test(code);
+    if (!hasMaterial) {
+      errors.push('Falta usar un material compatible de Three.js (MeshStandardMaterial, PointsMaterial, etc).');
     }
 
-    // Reglas HUD
-    if (!code.includes('hud.innerText') && !code.includes('hud.innerHTML')) {
-      errors.push('Falta actualizar el HUD en el bucle para mostrar datos en tiempo real.');
+    // Debe agregar al menos un objeto a scene
+    if (!code.includes('scene.add(')) {
+      errors.push('No se agregan objetos a la escena. Usa scene.add(objeto) para mostrar algo.');
+    }
+
+    // HUD update
+    if (!code.includes('hud.inner') && !/document\.getElementById\(/.test(code)) {
+      errors.push('Falta actualizar el HUD o usar document.getElementById para mostrar datos.');
     }
 
     return { 

@@ -1,0 +1,45 @@
+// @ts-nocheck
+declare const THREE: any;
+
+function setupSolarLighting(
+  scene,
+  sunPosition = new THREE.Vector3(0, 0, 0),
+  intensity = 1.5
+) {
+  const sunLight = new THREE.PointLight(0xffffff, intensity, 0);
+  sunLight.position.copy(sunPosition);
+  scene.add(sunLight);
+
+  const ambient = new THREE.AmbientLight(0x222244, 0.3);
+  scene.add(ambient);
+
+  return sunLight;
+}
+
+function setupPlanetLighting(scene) {
+  const ambient = new THREE.AmbientLight(0x334466, 0.35);
+  scene.add(ambient);
+
+  const main = new THREE.DirectionalLight(0xffeedd, 1.4);
+  main.position.set(15, 30, 20);
+  main.castShadow = true;
+  main.shadow.mapSize.width = 1024;
+  main.shadow.mapSize.height = 1024;
+  main.shadow.camera.left = -50;
+  main.shadow.camera.right = 50;
+  main.shadow.camera.top = 50;
+  main.shadow.camera.bottom = -50;
+  main.shadow.camera.near = 1;
+  main.shadow.camera.far = 100;
+  scene.add(main);
+
+  const fill = new THREE.DirectionalLight(0x4488ff, 0.3);
+  fill.position.set(-15, 0, 15);
+  scene.add(fill);
+
+  const rim = new THREE.DirectionalLight(0x88ccff, 0.15);
+  rim.position.set(0, -10, -20);
+  scene.add(rim);
+
+  return { main, fill, rim, ambient };
+}

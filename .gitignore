@@ -6,6 +6,11 @@ safevibe_output/
 
 # Secretos y configuración local
 config.json
+.env
 
 # Archivos del sistema
 .DS_Store
+*.bak
+config.json
+config.json.*
+.env

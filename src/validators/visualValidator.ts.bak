@@ -1,0 +1,135 @@
+import { chromium } from 'playwright';
+import path from 'node:path';
+import fs from 'node:fs';
+
+export interface VisualValidationResult {
+  pass: boolean;
+  meshCount: number;
+  isBlackScreen: boolean;
+  consoleErrors: string[];
+  runtimeErrors: string[];
+  screenshotPath: string;
+  score: number;
+  reasons: string[];
+}
+
+export class VisualValidator {
+  private screenshotDir: string;
+
+  constructor(screenshotDir?: string) {
+    this.screenshotDir = screenshotDir || '/tmp/safevibe-screenshots';
+  }
+
+  async validate(htmlPath: string): Promise<VisualValidationResult> {
+    await fs.promises.mkdir(this.screenshotDir, { recursive: true });
+
+    const browser = await chromium.launch({
+      headless: true,
+      args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader-webgl', '--enable-webgl', '--enable-unsafe-swiftshader'],
+    });
+    const context = await browser.newContext({
+      viewport: { width: 1280, height: 720 },
+    });
+    const page = await context.newPage();
+
+    const consoleErrors: string[] = [];
+    const runtimeErrors: string[] = [];
+
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') {
+        consoleErrors.push(msg.text());
+      }
+    });
+    page.on('pageerror', (err) => {
+      runtimeErrors.push(err.message);
+    });
+    page.on('crash', () => {
+      runtimeErrors.push('Browser tab crashed');
+    });
+
+    await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {
+      runtimeErrors.push('Timeout/error loading page');
+      return;
+    });
+
+    await page.waitForTimeout(2500);
+
+    let meshCount = 0;
+    try {
+      meshCount = await page.evaluate(() => {
+        try {
+          const scene = (window as any).scene;
+          if (!scene || !scene.children) return 0;
+          let count = 0;
+          scene.children.forEach((child: any) => {
+            if (child.isMesh) count++;
+            if (child.children && child.children.length) {
+              child.children.forEach((grandchild: any) => {
+                if (grandchild.isMesh) count++;
+              });
+            }
+          });
+          return count;
+        } catch {
+          return -1;
+        }
+      });
+    } catch {
+      runtimeErrors.push('Page closed before evaluation');
+    }
+
+    const isBlackScreen = meshCount <= 0;
+
+    const screenshotName = `sim-${Date.now()}.png`;
+    const screenshotPath = path.join(this.screenshotDir, screenshotName);
+    try {
+      await page.screenshot({ path: screenshotPath, fullPage: true });
+    } catch {
+      runtimeErrors.push('Screenshot failed (page crashed)');
+    }
+
+    if (runtimeErrors.length === 0) {
+      await browser.close();
+    } else {
+      try { await browser.close(); } catch {}
+    }
+
+    const reasons: string[] = [];
+    let score = 0;
+
+    if (meshCount >= 8) {
+      score += 30;
+    } else {
+      reasons.push(`meshCount: ${meshCount} (esperado >= 8)`);
+    }
+    if (meshCount >= 15) {
+      score += 20;
+    }
+    if (!isBlackScreen) {
+      score += 20;
+    } else {
+      reasons.push('Pantalla negra (meshCount <= 0)');
+    }
+    if (consoleErrors.length === 0) {
+      score += 15;
+    } else {
+      reasons.push(`Errores consola: ${consoleErrors.slice(0, 3).join('; ')}`);
+    }
+    if (runtimeErrors.length === 0) {
+      score += 15;
+    } else {
+      reasons.push(`Errores runtime: ${runtimeErrors.slice(0, 3).join('; ')}`);
+    }
+
+    return {
+      pass: score >= 70,
+      meshCount,
+      isBlackScreen,
+      consoleErrors,
+      runtimeErrors,
+      screenshotPath,
+      score,
+      reasons,
+    };
+  }
+}

@@ -4,9 +4,12 @@ import path from 'node:path';
 // Si el archivo no existe, usamos esta para no romper el sistema.
 const DEFAULT_CONFIG = {
     ai: {
-        provider: 'ollama-local', // Por defecto empezamos en local para proteger tu privacidad
-        model: 'llama3',
-        apiKey: undefined
+        provider: 'groq-cloud',
+        model: 'openai/gpt-oss-120b',
+        apiKey: undefined,
+        visionProvider: 'openrouter',
+        visionApiKey: undefined,
+        visionModel: 'google/gemma-4-31b-it:free'
     },
     voice: {
         enabled: false, // Desactivado por defecto para ahorrar batería y CPU en tu Chromebook
@@ -32,13 +35,31 @@ export async function loadConfig() {
         if (!parsedData.ai || !parsedData.voice) {
             throw new Error('Estructura de config.json inválida');
         }
+        // Prioridad a variables de entorno para no exponer keys en config.json
+        if (process.env.GROQ_API_KEY)
+            parsedData.ai.apiKey = process.env.GROQ_API_KEY;
+        if (process.env.OPENROUTER_API_KEY) {
+            parsedData.ai.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+            parsedData.ai.visionApiKey = process.env.OPENROUTER_API_KEY;
+        }
+        if (process.env.ANTHROPIC_API_KEY)
+            parsedData.ai.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
         return parsedData;
     }
     catch (error) {
         // Si el archivo no existe o está corrupto, devolvemos la configuración por defecto
         // y lo guardamos para que el usuario lo tenga visible.
-        await saveConfig(DEFAULT_CONFIG);
-        return DEFAULT_CONFIG;
+        const envDefault = { ...DEFAULT_CONFIG, ai: { ...DEFAULT_CONFIG.ai } };
+        if (process.env.GROQ_API_KEY)
+            envDefault.ai.apiKey = process.env.GROQ_API_KEY;
+        if (process.env.OPENROUTER_API_KEY) {
+            envDefault.ai.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+            envDefault.ai.visionApiKey = process.env.OPENROUTER_API_KEY;
+        }
+        if (process.env.ANTHROPIC_API_KEY)
+            envDefault.ai.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+        await saveConfig(envDefault);
+        return envDefault;
     }
 }
 // Guardar configuración

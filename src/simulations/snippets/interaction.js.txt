@@ -1,0 +1,63 @@
+// @ts-nocheck
+declare const THREE: any;
+
+function setupRaycaster(
+  camera,
+  domElement,
+  meshes,
+  onClick
+) {
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+
+  domElement.addEventListener('click', (event) => {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(meshes, true);
+    if (intersects.length > 0) {
+      onClick(intersects[0].object);
+    }
+  });
+}
+
+function setupCameraFollow(
+  camera,
+  controls,
+  target,
+  distance = 10
+) {
+  const direction = new THREE.Vector3(0, 0, 1).applyQuaternion(camera.quaternion);
+  camera.position.copy(target).add(direction.clone().multiplyScalar(distance));
+  controls.target.copy(target);
+}
+
+function setupHoverLabels(
+  scene,
+  meshes,
+  fontSize = 48
+) {
+  const sprites = [];
+  meshes.forEach(({ mesh, name }) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.roundRect(0, 0, 512, 128, 16);
+    ctx.fill();
+    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.fillText(name, 256, 80);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.position.set(0, mesh.geometry.parameters?.radius * 1.8 || 2, 0);
+    sprite.scale.set(4, 1, 1);
+    mesh.add(sprite);
+    sprites.push(sprite);
+  });
+  return sprites;
+}

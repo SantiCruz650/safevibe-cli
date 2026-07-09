@@ -1,11 +1,12 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Box, Text, useApp, useInput } from 'ink';
 import SelectInput from 'ink-select-input';
 import TextInput from 'ink-text-input';
 import pc from 'picocolors';
 import { SecureGenerator } from '../core/secureGenerator.js';
 import { FileReaderUtil } from '../system/fileReader.js';
+import { serveDir } from '../validators/visualValidator.js';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs/promises';
@@ -20,6 +21,7 @@ export default function App() {
     const [logs, setLogs] = useState([]);
     const [finalCode, setFinalCode] = useState('');
     const [simPath, setSimPath] = useState('');
+    const simServerRef = useRef(null);
     const addLog = (msg, type) => {
         setLogs(prev => [...prev, { msg, type }]);
     };
@@ -81,14 +83,30 @@ export default function App() {
     };
     useEffect(() => {
         if (view === 'running_sim' && simPath) {
-            spawn('xdg-open', [simPath], { stdio: 'ignore' });
+            const start = async () => {
+                const srv = await serveDir(path.dirname(simPath));
+                simServerRef.current = srv.close;
+                const url = `${srv.origin}/${path.basename(simPath)}`;
+                spawn('xdg-open', [url], { stdio: 'ignore' });
+            };
+            start();
         }
+        return () => {
+            if (view !== 'running_sim' && simServerRef.current) {
+                simServerRef.current();
+                simServerRef.current = null;
+            }
+        };
     }, [view, simPath]);
     useInput((input) => {
         if (view === 'result' && input === 'q') {
             exit();
         }
         if (view === 'running_sim' && input === 'return') {
+            if (simServerRef.current) {
+                simServerRef.current();
+                simServerRef.current = null;
+            }
             setView('menu');
             setPrompt('');
             setFilePath('');
@@ -164,7 +182,10 @@ export default function App() {
                     }) })] }));
     }
     if (view === 'result') {
-        return (_jsxs(Box, { flexDirection: "column", children: [finalCode ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: "green", bold: true, children: "[SECURE] Code passed security and compilation." }), _jsx(Box, { marginY: 1, flexDirection: "column", children: finalCode.split('\n').map((line, i) => _jsx(Text, { color: "cyan", children: line }, i)) })] })) : (_jsx(Text, { color: "red", bold: true, children: "[FATAL] Code generation failed or API configuration incomplete." })), _jsx(Box, { marginTop: 1, children: _jsx(Text, { dimColor: true, children: "Press 'q' to exit..." }) })] }));
+        return (_jsxs(Box, { flexDirection: "column", children: [finalCode ? (_jsxs(_Fragment, { children: [_jsx(Text, { color: "green", bold: true, children: "[SECURE] Code passed security and compilation." }), _jsx(Box, { marginY: 1, flexDirection: "column", children: finalCode.split('\n').map((line, i) => _jsx(Text, { color: "cyan", children: line }, i)) })] })) : (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "red", bold: true, children: "[FATAL] Code generation failed or API configuration incomplete." }), logs.length > 0 && (_jsx(Box, { marginTop: 1, flexDirection: "column", borderStyle: "round", borderColor: "red", padding: 1, children: logs.map((log, i) => {
+                                const c = log.type === 'error' ? 'red' : log.type === 'warn' ? 'yellow' : 'white';
+                                return _jsx(Text, { color: c, children: log.msg }, i);
+                            }) }))] })), _jsx(Box, { marginTop: 1, children: _jsx(Text, { dimColor: true, children: "Press 'q' to exit..." }) })] }));
     }
     if (view === 'running_sim') {
         return (_jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { color: "green", bold: true, children: "[SUCCESS] Scientific simulation opened in your browser!" }), _jsx(Box, { marginTop: 1, children: _jsx(Text, { color: "cyan", children: "Press Enter to return to the menu." }) })] }));

@@ -1,0 +1,294 @@
+function createCanvas(w, h) {
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    return { canvas, ctx };
+}
+function simplexNoise(x, y) {
+    return Math.sin(x * 12.9898 + y * 78.233) * 43758.5453 % 1;
+}
+function fbm(x, y, octaves) {
+    let value = 0;
+    let amp = 1;
+    let freq = 1;
+    for (let i = 0; i < octaves; i++) {
+        value += amp * (Math.sin(x * freq * 3.14159) * Math.cos(y * freq * 3.14159) * 0.5 + 0.5);
+        amp *= 0.5;
+        freq *= 2;
+    }
+    return Math.max(0, Math.min(1, value));
+}
+function createSunTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n1 = fbm(nx * 8, ny * 8, 5);
+            const n2 = fbm(nx * 16 + 0.5, ny * 16 + 0.5, 3);
+            const intensity = 0.8 + 0.2 * n1 + 0.1 * n2;
+            const r = Math.min(255, Math.floor(255 * intensity));
+            const g = Math.min(255, Math.floor(200 * intensity));
+            const b = Math.min(255, Math.floor(50 * intensity));
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+function createMercuryTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const base = 0.55 + 0.1 * fbm(nx * 20, ny * 20, 6);
+            const crater = Math.random() < 0.001 ? 0.2 : 0;
+            const v = Math.max(0, Math.min(1, base - crater));
+            const c = Math.floor(160 + 60 * v);
+            ctx.fillStyle = `rgb(${c},${c - 10},${c - 20})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createVenusTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n1 = fbm(nx * 6 + ny * 2, ny * 4, 4);
+            const n2 = fbm(nx * 12, ny * 8 + 0.3, 3);
+            const band = Math.sin(ny * 20 + n1 * 2) * 0.5 + 0.5;
+            const r = Math.floor(180 + 70 * band * (0.8 + 0.2 * n2));
+            const g = Math.floor(140 + 60 * band * (0.7 + 0.3 * n2));
+            const b = Math.floor(60 + 40 * band * (0.6 + 0.4 * n2));
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createEarthTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const land = fbm(nx * 4 + 0.3, ny * 4 + 0.7, 6);
+            const latFactor = Math.abs(ny - 0.5) * 2;
+            let r, g, b;
+            if (land > 0.48) {
+                const green = 0.3 + 0.5 * fbm(nx * 8, ny * 8, 3);
+                if (latFactor > 0.85) {
+                    r = 240;
+                    g = 245;
+                    b = 255;
+                }
+                else if (land > 0.6) {
+                    r = Math.floor(60 + 80 * green);
+                    g = Math.floor(80 + 120 * green);
+                    b = Math.floor(30 + 40 * green);
+                }
+                else {
+                    r = Math.floor(140 + 60 * (1 - green));
+                    g = Math.floor(120 + 40 * (1 - green));
+                    b = Math.floor(50 + 30 * (1 - green));
+                }
+            }
+            else {
+                const depth = 0.3 + 0.7 * (1 - land / 0.48);
+                r = Math.floor(20 * (1 - depth));
+                g = Math.floor(60 + 80 * depth);
+                b = Math.floor(140 + 80 * depth);
+            }
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createEarthCloudsTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n = fbm(nx * 10 + 1.5, ny * 8 + 0.8, 5);
+            const v = Math.max(0, Math.min(1, (n - 0.35) * 4));
+            ctx.fillStyle = `rgba(255,255,255,${v * 0.6})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createMarsTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n = fbm(nx * 10, ny * 10, 5);
+            const latFactor = Math.abs(ny - 0.5) * 2;
+            let r, g, b;
+            if (latFactor > 0.85) {
+                r = 220 + Math.floor(35 * n);
+                g = 220 + Math.floor(35 * n);
+                b = 230 + Math.floor(25 * n);
+            }
+            else {
+                r = Math.floor(160 + 80 * n);
+                g = Math.floor(60 + 50 * n);
+                b = Math.floor(30 + 30 * n);
+            }
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createJupiterTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    const spotX = 0.65 + Math.random() * 0.08;
+    const spotY = 0.52 + Math.random() * 0.04;
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const turbulence = fbm(nx * 3, ny * 3, 3) * 0.15;
+            const band = Math.sin((ny + turbulence) * 35 + fbm(nx * 2, ny * 2, 2)) * 0.5 + 0.5;
+            const r = Math.floor(170 + 80 * band);
+            const g = Math.floor(100 + 70 * (1 - band));
+            const b = Math.floor(50 + 60 * (1 - band));
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    const dx = (spotX - 0.5) * 1024;
+    const dy = (spotY - 0.5) * 512;
+    ctx.fillStyle = 'rgba(200,80,40,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(512 + dx, 256 + dy, 30, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,150,100,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(512 + dx, 256 + dy, 38, 24, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return new THREE.CanvasTexture(canvas);
+}
+function createSaturnTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const band = Math.sin(ny * 30 + fbm(nx * 4, ny * 2, 3) * 0.5) * 0.5 + 0.5;
+            const r = Math.floor(200 + 50 * band);
+            const g = Math.floor(180 + 50 * band);
+            const b = Math.floor(120 + 50 * band);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createSaturnRingsTexture() {
+    const { canvas, ctx } = createCanvas(1024, 64);
+    for (let y = 0; y < 64; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const gap1 = 0.35;
+            const gap2 = 0.62;
+            const cassini = 0.48;
+            let v;
+            if (Math.abs(nx - gap1) < 0.02 || Math.abs(nx - gap2) < 0.015) {
+                v = 0.05;
+            }
+            else if (Math.abs(nx - cassini) < 0.008) {
+                v = 0.1;
+            }
+            else {
+                v = 0.3 + 0.7 * fbm(nx * 60 + y * 0.1, y * 0.5, 3);
+            }
+            const c = Math.floor(180 + 70 * v);
+            const alpha = v;
+            ctx.fillStyle = `rgba(${c},${c - 20},${c - 40},${alpha})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    return tex;
+}
+function createUranusTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n = fbm(nx * 6, ny * 6, 4);
+            const band = Math.sin(ny * 25 + n * 0.3) * 0.5 + 0.5;
+            const r = Math.floor(100 + 40 * band);
+            const g = Math.floor(180 + 50 * band);
+            const b = Math.floor(210 + 40 * band);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createNeptuneTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n = fbm(nx * 5, ny * 5, 4);
+            const band = Math.sin(ny * 20 + n * 0.4) * 0.5 + 0.5;
+            const r = Math.floor(30 + 60 * band);
+            const g = Math.floor(50 + 90 * band);
+            const b = Math.floor(180 + 70 * band);
+            ctx.fillStyle = `rgb(${r},${g},${b})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createMoonTexture() {
+    const { canvas, ctx } = createCanvas(1024, 512);
+    for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+            const nx = x / 1024;
+            const ny = y / 512;
+            const n = fbm(nx * 15, ny * 15, 6);
+            const crater = Math.random() < 0.0005 ? 0.3 : 0;
+            const v = Math.max(0, Math.min(1, 0.5 + 0.4 * n - crater));
+            const c = Math.floor(160 + 80 * v);
+            ctx.fillStyle = `rgb(${c},${c},${c})`;
+            ctx.fillRect(x, y, 1, 1);
+        }
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+function createStarfieldTexture() {
+    const { canvas, ctx } = createCanvas(2048, 1024);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, 2048, 1024);
+    for (let i = 0; i < 6000; i++) {
+        const x = Math.random() * 2048;
+        const y = Math.random() * 1024;
+        const brightness = 0.2 + Math.random() * 0.8;
+        const size = 0.5 + Math.random() * 2;
+        const c = Math.floor(255 * brightness);
+        ctx.fillStyle = `rgb(${c},${c},${c})`;
+        ctx.beginPath();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    return new THREE.CanvasTexture(canvas);
+}
+export {};

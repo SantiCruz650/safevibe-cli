@@ -5,10 +5,15 @@ import path from 'node:path';
 // Esto actúa como un "contrato". Si algo no cumple esto, TypeScript lanza un error.
 export interface SafeVibeConfig {
   ai: {
-    provider: 'openai' | 'anthropic' | 'ollama-local' | 'groq-cloud';
+    provider: 'openai' | 'anthropic' | 'ollama-local' | 'groq-cloud' | 'openrouter';
     model: string;
     apiKey?: string; // Opcional porque Ollama local no necesita clave
     anthropicApiKey?: string; // Clave para Claude 3.5 Sonnet (Vision)
+    openRouterApiKey?: string; // Clave para OpenRouter
+    codeModel?: string;       // Modelo de código
+    visionProvider?: 'openrouter' | 'none'; // Proveedor separado para visión
+    visionApiKey?: string;    // API key para el proveedor de visión
+    visionModel?: string;     // Modelo de visión
   };
   voice: {
     enabled: boolean;
@@ -27,9 +32,12 @@ export interface SafeVibeConfig {
 // Si el archivo no existe, usamos esta para no romper el sistema.
 const DEFAULT_CONFIG: SafeVibeConfig = {
   ai: {
-    provider: 'ollama-local', // Por defecto empezamos en local para proteger tu privacidad
-    model: 'llama3',
-    apiKey: undefined
+    provider: 'groq-cloud',
+    model: 'openai/gpt-oss-120b',
+    apiKey: undefined,
+    visionProvider: 'openrouter',
+    visionApiKey: undefined,
+    visionModel: 'google/gemma-4-31b-it:free'
   },
   voice: {
     enabled: false, // Desactivado por defecto para ahorrar batería y CPU en tu Chromebook
@@ -60,12 +68,27 @@ export async function loadConfig(): Promise<SafeVibeConfig> {
       throw new Error('Estructura de config.json inválida');
     }
     
+    // Prioridad a variables de entorno para no exponer keys en config.json
+    if (process.env.GROQ_API_KEY) parsedData.ai.apiKey = process.env.GROQ_API_KEY;
+    if (process.env.OPENROUTER_API_KEY) {
+      parsedData.ai.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+      parsedData.ai.visionApiKey = process.env.OPENROUTER_API_KEY;
+    }
+    if (process.env.ANTHROPIC_API_KEY) parsedData.ai.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+
     return parsedData as SafeVibeConfig;
   } catch (error) {
     // Si el archivo no existe o está corrupto, devolvemos la configuración por defecto
     // y lo guardamos para que el usuario lo tenga visible.
-    await saveConfig(DEFAULT_CONFIG);
-    return DEFAULT_CONFIG;
+    const envDefault = { ...DEFAULT_CONFIG, ai: { ...DEFAULT_CONFIG.ai } };
+    if (process.env.GROQ_API_KEY) envDefault.ai.apiKey = process.env.GROQ_API_KEY;
+    if (process.env.OPENROUTER_API_KEY) {
+      envDefault.ai.openRouterApiKey = process.env.OPENROUTER_API_KEY;
+      envDefault.ai.visionApiKey = process.env.OPENROUTER_API_KEY;
+    }
+    if (process.env.ANTHROPIC_API_KEY) envDefault.ai.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+    await saveConfig(envDefault);
+    return envDefault;
   }
 }
 

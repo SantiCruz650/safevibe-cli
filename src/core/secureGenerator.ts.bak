@@ -54,34 +54,6 @@ export class SecureGenerator {
   private validateSimulationCode(code: string): string[] {
     const errors: string[] = [];
 
-    // NUEVO Bug #0: import/export ES modules (CRÍTICO - rompe todo)
-    if (/^\s*import\s+/m.test(code) || /\bfrom\s+['"][^'"]+['"]/m.test(code)) {
-      errors.push('ANTI-BUG CRÍTICO: NUNCA uses import/export ES modules. TODO es global. Borra todas las líneas "import ..." y "export ...".');
-    }
-
-    // NUEVO Bug #0b: redeclarar scene/camera/renderer/controls/clock
-    const boilerplate = ['scene', 'camera', 'renderer', 'controls', 'clock'];
-    boilerplate.forEach(v => {
-      const re = new RegExp('\\b(var|let|const)\\s+' + v + '\\s*=', 'g');
-      if (re.test(code)) {
-        errors.push('ANTI-BUG CRÍTICO: ' + v + ' ya existe (lo provee el boilerplate). NO lo redeclares con var/let/const.');
-      }
-    });
-
-    // NUEVO Bug #0c: crear THREE.Scene/Camera/Renderer nuevos
-    if (/new\s+THREE\.Scene\s*\(/.test(code)) {
-      errors.push('ANTI-BUG: NO crees new THREE.Scene(). Usa la variable global "scene" ya creada.');
-    }
-    if (/new\s+THREE\.WebGLRenderer/.test(code)) {
-      errors.push('ANTI-BUG: NO crees new THREE.WebGLRenderer(). Usa la variable global "renderer" ya creada.');
-    }
-    if (/new\s+THREE\.PerspectiveCamera/.test(code)) {
-      errors.push('ANTI-BUG: NO crees new THREE.PerspectiveCamera(). Usa la variable global "camera" ya creada.');
-    }
-    if (/new\s+THREE\.OrbitControls/.test(code)) {
-      errors.push('ANTI-BUG: NO crees new THREE.OrbitControls(). Usa la variable global "controls" ya creada.');
-    }
-
     // Bug recurrente #1: IA redeclara 'var hud' siendo que el bootstrap ya lo declara
     const hudDeclarations = (code.match(/\bvar\s+hud\s*=/g) || []).length
                           + (code.match(/\bconst\s+hud\s*=/g) || []).length
@@ -175,148 +147,6 @@ export class SecureGenerator {
     return errors;
   }
 
-  /**
-   * Colapsa funciones top-level duplicadas conservando la PRIMERA aparicion y borrando
-   * las siguientes. Como los templates se concatenan antes que el codigo de la IA, "la
-   * primera" es la del template (fuente de verdad). Resuelve "Identifier already declared"
-   * venga de donde venga: template-vs-template, IA-vs-template, o IA duplicandose.
-   */
-  private collapseDuplicateTopLevelFunctions(code: string): { code: string; removed: string[] } {
-    const seen = new Set<string>();
-    const removed: string[] = [];
-    const lines = code.split('\n');
-    const out: string[] = [];
-    let i = 0;
-    while (i < lines.length) {
-      const match = /^function\s+([A-Za-z_$][\w$]*)\s*\(/.exec(lines[i]); // solo columna 0
-      if (match) {
-        const name = match[1];
-        if (seen.has(name)) {
-          removed.push(name);
-          let depth = 0;
-          let started = false;
-          while (i < lines.length) {
-            for (const ch of lines[i]) {
-              if (ch === '{') { depth++; started = true; }
-              else if (ch === '}') { depth--; }
-            }
-            i++;
-            if (started && depth <= 0) break; // se cerro el cuerpo de la funcion
-          }
-          continue; // no la agregamos a out
-        }
-        seen.add(name);
-      }
-      out.push(lines[i]);
-      i++;
-    }
-    return { code: out.join('\n'), removed };
-  }
-
-  /**
-   * Genera API summary comprimido de templates (para enviar al LLM sin exceder TPM).
-   * NO envía las implementaciones, solo firmas + descripción.
-   * Las implementaciones se inyectan después en el HTML final.
-   */
-  private buildTemplatesApiSummary(fullTemplates: string): string {
-    // Extraer solo firmas de funciones: function name(...) { ... }
-    const fnMatches = fullTemplates.match(/(?:function|var)\s+(\w+)\s*\([^)]*\)/g) || [];
-    // Extraer nombres de variables globales importantes
-    const varMatches = fullTemplates.match(/var\s+(\w+)\s*=/g) || [];
-    const vars = varMatches.map(v => v.replace(/var\s+/, '').replace(/\s*=$/, '')).filter(v =>
-      !['i', 'j', 'k', 'x', 'y', 'z', 'n', 'r', 'g', 'b'].includes(v)
-    );
-    const uniqueVars = [...new Set(vars)].slice(0, 20);
-
-    return '## VARIABLES GLOBALES YA DISPONIBLES (NO redeclarar, NO importar, SOLO USAR):\n' +
-      'scene, camera, renderer, controls, clock, hud\n\n' +
-      '## API DISPONIBLE (no reimplementes, solo LLAMA):\n' +
-      '\nFunciones:\n' +
-      fnMatches.slice(0, 30).map(f => '  - ' + f.replace(/\s+/g, ' ').trim()).join('\n') +
-      '\n\nConstantes/Arrays:\n' +
-      uniqueVars.map(v => '  - ' + v).join('\n') +
-      '\n\n## REGLAS CRÍTICAS:\n' +
-      '1. NUNCA uses import/export ES modules (rompe el script)\n' +
-      '2. NUNCA redeclares scene/camera/renderer/controls/clock/hud\n' +
-      '3. NUNCA uses TypeScript (as Type, : type)\n' +
-      '4. TODO es global, llama funciones directamente\n' +
-      '5. createSun/createPlanetMesh ya hacen scene.add() internamente\n';
-  }
-
-  /**
-   * Genera simulación de sistema solar en 3 llamadas LLM pequeñas (TPM 6000 safe).
-   * Llamada 1: datos + Sol + planetas (sin lunas ni órbitas)
-   * Llamada 2: lunas + órbitas + raycaster + HUD
-   * Llamada 3: animate() + key handler
-   */
-  private async generateSolarSystemChunked(
-    userPrompt: string,
-    systemInstruction: string,
-    solarSystemTemplates: string,
-    onLog: (msg: string, type: LogType) => void,
-    imageBase64?: string,
-    mimeType?: string
-  ): Promise<string> {
-    const apiSummary = this.buildTemplatesApiSummary(solarSystemTemplates);
-    onLog('[CHUNKED] API summary: ' + apiSummary.length + ' bytes', 'info');
-
-    const base = apiSummary + '\n\n' + systemInstruction;
-
-    // === LLAMADA 1: Sol + planetas ===
-    const prompt1 = base +
-      '\n\nTAREA 1 de 3: Genera SOLO:\n' +
-      '1. var sun = createSun(8, getPlanetTexture(\'sun\'))\n' +
-      '2. var planets = []; var meshes = [];\n' +
-      '3. Bucle SOLAR_SYSTEM_DATA.forEach → createPlanetMesh + getPlanetTexture\n' +
-      '4. obj.mesh.name = planet.id (para raycaster)\n' +
-      '5. planets.push(obj); meshes.push(obj.mesh)\n\n' +
-      'NO escribas function animate(). NO crees scene/camera (ya existen).\n' +
-      'NO uses import. TODO es global.\n\n' +
-      'Usuario: ' + userPrompt;
-
-    onLog('[CHUNKED] Llamada 1/3: Sol + planetas...', 'info');
-    const raw1 = await this.aiManager.ask(prompt1, '', imageBase64, mimeType);
-    const code1 = this.extractCode(raw1);
-    onLog('[CHUNKED] Fase 1 recibida (' + code1.length + ' chars).', 'success');
-
-    await new Promise(r => setTimeout(r, 3000)); // pausa TPM
-
-    // === LLAMADA 2: lunas + órbitas + raycaster + HUD ===
-    const prompt2 = base +
-      '\n\nCODIGO ANTERIOR (no lo repitas):\n' + code1.substring(0, 800) +
-      '\n\nTAREA 2 de 3: Agrega SOLO:\n' +
-      '1. Bucle planets.forEach → crear lunas con createMoonMesh\n' +
-      '2. Bucle planets.forEach → crear órbita con createOrbitLine(planet.distance)\n' +
-      '3. setupRaycaster(camera, renderer.domElement, meshes, callback)\n' +
-      '4. En callback: hud.innerHTML = datos del planeta\n' +
-      '5. camera.position.set(0, 80, 180); camera.lookAt(0,0,0)\n\n' +
-      'NO repitas el código anterior. NO escribas animate().';
-
-    onLog('[CHUNKED] Llamada 2/3: lunas + órbitas + raycaster...', 'info');
-    const raw2 = await this.aiManager.ask(prompt2, '', imageBase64, mimeType);
-    const code2 = this.extractCode(raw2);
-    onLog('[CHUNKED] Fase 2 recibida (' + code2.length + ' chars).', 'success');
-
-    await new Promise(r => setTimeout(r, 3000));
-
-    // === LLAMADA 3: animate + key handler ===
-    const prompt3 = base +
-      '\n\nVARIABLES DISPONIBLES: planets (array de {mesh, pivot, group}), SOLAR_SYSTEM_DATA, meshes\n' +
-      '\nTAREA 3 de 3: Escribe SOLO:\n' +
-      '1. function animate() { requestAnimationFrame(animate); var dt = Math.min(clock.getDelta(), 0.05); planets.forEach(function(p, i) { updateOrbitalPosition(p.pivot, dt, SOLAR_SYSTEM_DATA[i+1].orbitalPeriod); }); controls.update(); renderer.render(scene, camera); }\n' +
-      '2. animate();\n' +
-      '3. document.addEventListener(\'keydown\', function(e) { if (e.key.toLowerCase() === \'o\') { /* toggle órbitas */ } });\n\n' +
-      'SOLO animate + key handler.';
-
-    onLog('[CHUNKED] Llamada 3/3: animate + teclado...', 'info');
-    const raw3 = await this.aiManager.ask(prompt3, '', imageBase64, mimeType);
-    const code3 = this.extractCode(raw3);
-    onLog('[CHUNKED] Fase 3 recibida (' + code3.length + ' chars).', 'success');
-
-    return code1 + '\n\n// === LUNAS + ÓRBITAS + RAYCASTER ===\n\n' + code2 +
-      '\n\n// === ANIMATION LOOP ===\n\n' + code3;
-  }
-
   public async generate(
     langChoice: 'ts' | 'py' | 'web',
     userPrompt: string,
@@ -343,45 +173,37 @@ export class SecureGenerator {
       if (isSolarSystem) {
         const templateDir = path.join(SIMULATIONS_DIR, 'solar-system', 'templates');
         const snippetsDir = path.join(SIMULATIONS_DIR, 'snippets');
-        const [dataContent, texturesContent, textureMapContent, snippetsContent, promptContent,
+        const [dataContent, texturesContent, snippetsContent, promptContent,
                proceduralTex, orbitalMech, interactionSn, atmosphereSn, lightingSn] = await Promise.all([
-          fs.readFile(path.join(templateDir, 'data.js.txt'), 'utf-8'),
-          fs.readFile(path.join(templateDir, 'textures.js.txt'), 'utf-8'),
-          fs.readFile(path.join(templateDir, 'texture-fn-map.js.txt'), 'utf-8'),
-          fs.readFile(path.join(templateDir, 'scene-snippet.js.txt'), 'utf-8'),
+          fs.readFile(path.join(templateDir, 'data.ts'), 'utf-8'),
+          fs.readFile(path.join(templateDir, 'textures.ts'), 'utf-8'),
+          fs.readFile(path.join(templateDir, 'scene-snippet.ts'), 'utf-8'),
           fs.readFile(path.join(templateDir, 'system-prompt.md'), 'utf-8'),
-          fs.readFile(path.join(snippetsDir, 'procedural-texture.js.txt'), 'utf-8'),
-          fs.readFile(path.join(snippetsDir, 'orbital-mechanics.js.txt'), 'utf-8'),
-          fs.readFile(path.join(snippetsDir, 'interaction.js.txt'), 'utf-8'),
-          fs.readFile(path.join(snippetsDir, 'atmosphere.js.txt'), 'utf-8'),
-          fs.readFile(path.join(snippetsDir, 'lighting.js.txt'), 'utf-8'),
+          fs.readFile(path.join(snippetsDir, 'procedural-texture.ts'), 'utf-8'),
+          fs.readFile(path.join(snippetsDir, 'orbital-mechanics.ts'), 'utf-8'),
+          fs.readFile(path.join(snippetsDir, 'interaction.ts'), 'utf-8'),
+          fs.readFile(path.join(snippetsDir, 'atmosphere.ts'), 'utf-8'),
+          fs.readFile(path.join(snippetsDir, 'lighting.ts'), 'utf-8'),
         ]);
         const stripTSConstructs = (s: string) => s
-          // Comentarios y declaraciones TypeScript
-          .replace(/\/\/\s*@ts-nocheck\s*$/gm, '')
-          .replace(/^declare\s+(const|var|let|function|class|enum|namespace|module)\s+[^;]+;/gm, '')
-          // Imports/exports ES modules
+          .replace(/^\/\/\s*@ts-nocheck\s*$/gm, '')
+          .replace(/^declare\s+(const|var|let|function|class|enum|namespace|module)\s+[\w\s:;,.<>(){}[\]|&]*;$/gm, '')
           .replace(/^export\s+/gm, '')
-          .replace(/^import\s+[^;]+;\s*$/gm, '')
+          .replace(/^import\s+type\s+.*;$/gm, '')
           .replace(/^\/\/\/\s*<reference.*$/gm, '')
-          // Interfaces (bloques completos)
-          .replace(/^interface\s+\w[^{]*\{[\s\S]*?^\}/gm, '')
-          // Type aliases
-          .replace(/^type\s+\w+\s*=[^;]+;\s*$/gm, '')
-          // Type assertions: "x as Type" → "x"
-          .replace(/\s+as\s+[A-Z]\w*(?:<[^>]*>)?/g, '')
-          // Non-null assertion: "x!" → "x"
+          .replace(/^interface\s+\w[\w<>,]*(?:\s+extends\s+\w[\w<>,]*)?\s*\{[\s\S]*?^\}/gm, '')
+          .replace(/\b(const|let|var)\s+(\w+)\s*:\s*[\w<>[\],\s|&]+\s*=/g, '$1 $2 =')
+          .replace(/:\s*(number|string|boolean|void|any|never|undefined|null)\b/g, '')
+          .replace(/\((\w+)\s*:\s*[\w<>[\],\s|&]+\)/g, '($1)')
+          .replace(/\((\w+)\s*:\s*[\w<>[\],\s|&]+,/g, '($1,')
+          .replace(/,\s*(\w+)\s*:\s*[\w<>[\],\s|&]+\)/g, ', $1)')
+          .replace(/\)\s*:\s*[\w<>[\],\s|&]+\s*\{/g, ') {')
+          .replace(/\)\s*:\s*(Promise<[\w<>[\],\s|&]+>|[\w<>[\],\s|&]+)\s*\{/g, ') {')
+          .replace(/:\s*\{[\s\S]*?\}\s*(?=\{)/g, '')
           .replace(/!([,;\s\)\]\}])/g, '$1')
-          // Declavar variables con tipo: "const x: Type = ..." → "const x = ..."
-          // SAFETY: solo matchea UNA variable a la vez, NO toca lo que sigue de la coma
-          .replace(/\b(const|let|var)\s+(\w+)\s*:\s*[A-Za-z_][\w<>\[\],\s|&]*(?=\s*=)/g, '$1 $2')
-          // Function return type: "function f(): Type {" → "function f() {"
-          .replace(/(function\s+\w+\s*\([^)]*\))\s*:\s*[A-Za-z_][\w<>\[\],\s|&]*\s*\{/g, '$1 {')
-          // Function params: "(x: Type)" → "(x)" — SOLO un parámetro a la vez
-          .replace(/\((\w+)\s*:\s*[A-Za-z_][\w<>\[\],\s|&]*(?=[,\)])/g, '($1')
           .trim();
         const allSnippets = [
-          dataContent, texturesContent, textureMapContent, snippetsContent,
+          dataContent, texturesContent, snippetsContent,
           proceduralTex, orbitalMech, interactionSn, atmosphereSn, lightingSn,
         ].map(stripTSConstructs).join('\n\n');
         solarSystemTemplates = allSnippets;
@@ -445,18 +267,9 @@ export class SecureGenerator {
     const sandboxFile = isSimulation ? 'sandbox.js' : 'sandbox' + extension;
 
     onLog('Requesting code to cloud AI...', 'info');
-    if (isSimulation && solarSystemTemplates) {
-      // Generación chunked: 2 llamadas para evitar truncamiento TPM
-      currentJsCode = await this.generateSolarSystemChunked(
-        userPrompt, systemInstruction, solarSystemTemplates,
-        onLog, imageBase64, mimeType
-      );
-      onLog('Código generado en 2 fases (chunked).', 'success');
-    } else {
-      let rawCode = await this.aiManager.ask(systemInstruction, userPrompt, imageBase64, mimeType);
-      currentJsCode = this.extractCode(rawCode);
-      onLog('Initial code received.', 'success');
-    }
+    let rawCode = await this.aiManager.ask(systemInstruction, userPrompt, imageBase64, mimeType);
+    currentJsCode = this.extractCode(rawCode);
+    onLog('Initial code received.', 'success');
 
     // --- Paso 0: bucle separado de correccion de simulacion (no consume reintentos de validacion) ---
     if (isSimulation) {
@@ -544,30 +357,13 @@ export class SecureGenerator {
       }
     }
 
-    const VISUAL_RETRIES = 2;
+    const VISUAL_RETRIES = 3;
 
     if (isSimulation && isSecure) {
-      // Chequeo de sintaxis local: atrapa SyntaxError en milisegundos, sin gastar Chromium ni
-      // una llamada al LLM en algo que no parsea.
-      const jsToCheck = solarSystemTemplates
-        ? solarSystemTemplates + '\n\n' + currentJsCode
-        : currentJsCode;
-      try {
-        new Function(jsToCheck);
-      } catch (e: any) {
-        onLog(`[SYNTAX] El codigo final tiene un error de sintaxis: ${e.message}. No se renderiza.`, 'error');
-      }
-
       for (let vAttempt = 1; vAttempt <= VISUAL_RETRIES; vAttempt++) {
-        let finalJs = solarSystemTemplates
+        const finalJs = solarSystemTemplates
           ? solarSystemTemplates + '\n\n' + currentJsCode
           : currentJsCode;
-        // Colapsar duplicados del codigo FINAL (templates + IA) antes de renderizar.
-        const collapsed = this.collapseDuplicateTopLevelFunctions(finalJs);
-        if (collapsed.removed.length > 0) {
-          onLog(`[DEDUP] Colapsadas ${collapsed.removed.length} funcion(es) duplicada(s) (se conservo la 1ra): ${collapsed.removed.join(', ')}`, 'warn');
-          finalJs = collapsed.code;
-        }
         const finalHtml = generateHtmlBoilerplate(finalJs);
 
         const tempHtmlPath = path.join(process.cwd(), 'safevibe_output', `_visual_check_${Date.now()}.html`);
@@ -575,7 +371,7 @@ export class SecureGenerator {
 
         onLog(`[VISUAL] Validando renderizado (intento ${vAttempt}/${VISUAL_RETRIES})...`, 'info');
         const visualResult = await this.visualValidator.validate(tempHtmlPath);
-        // await fs.unlink(tempHtmlPath).catch(() => {});
+        await fs.unlink(tempHtmlPath).catch(() => {});
 
         onLog(`[VISUAL] Score: ${visualResult.score}/100 | Meshes: ${visualResult.meshCount} | Pantalla negra: ${visualResult.isBlackScreen}`, visualResult.pass ? 'success' : 'warn');
         visualResult.reasons.forEach(r => onLog(`  ↳ ${r}`, visualResult.pass ? 'success' : 'error'));
@@ -586,26 +382,7 @@ export class SecureGenerator {
           } else {
             onLog(`[VISUAL] Falló tras ${VISUAL_RETRIES} intentos. Usando último resultado.`, 'warn');
           }
-          // Guardar log de la sesión para diagnóstico
-        const logPath = path.join(process.cwd(), 'safevibe_output', 'last-session.log');
-        const logContent = [
-          '=== SafeVibe Session Log ===',
-          'Date: ' + new Date().toISOString(),
-          'Prompt: ' + userPrompt,
-          'Visual score: ' + visualResult.score + '/100',
-          'Meshes: ' + visualResult.meshCount,
-          'Black screen: ' + visualResult.isBlackScreen,
-          'Reasons: ' + visualResult.reasons.join(' | '),
-          'Console errors: ' + visualResult.consoleErrors.join(' | '),
-          'Runtime errors: ' + visualResult.runtimeErrors.join(' | '),
-          'Screenshot: ' + visualResult.screenshotPath,
-          '',
-          '=== GENERATED CODE ===',
-          currentJsCode,
-        ].join('\n');
-        try { await fs.writeFile(logPath, logContent); } catch (e) {}
-        
-        return { success: visualResult.pass, code: finalHtml, extension: '.html' };
+          return { success: true, code: finalHtml, extension: '.html' };
         }
 
         const vErrors = [
