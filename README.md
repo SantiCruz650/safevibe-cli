@@ -1,3 +1,5 @@
+"Actúa como un Arquitecto de Software. Necesito que crees o sobrescribas el archivo README.md en la raíz del proyecto con el siguiente contenido exacto. No añadas ni quites nada, respeta el formato Markdown:
+
 SafeVibe CLI
 Codigo que compila no es codigo seguro.
 
@@ -20,6 +22,8 @@ SafeVibe esta disenado para ejecutarse sin friccion en entornos de integracion c
 Salida JSON estructurada:
 El CLI devuelve un JSON estricto y codigos de salida estandar (0 para exito, 1 para fallo), perfecto para automatizacion.
 
+json
+
 {
   "success": false,
   "language": "typescript",
@@ -31,9 +35,10 @@ El CLI devuelve un JSON estricto y codigos de salida estandar (0 para exito, 1 p
   ],
   "finalCode": null
 }
-
 Arquitectura
 Construido con un enfoque en cero dependencias innecesarias. El motor esta separado de la interfaz y disenado para escalabilidad.
+
+text
 
 src/
 ├── cli.ts                     # Entry point headless (parseo de argv)
@@ -41,11 +46,14 @@ src/
 ├── validators/                # Logica de cada capa (Seguridad, Compilacion, Visual)
 ├── ai/providers/              # Patron adaptador (Groq, OpenRouter, Anthropic, Ollama)
 └── system/fileManager.ts      # Sandbox temporal aislado
-
 Roadmap Enterprise
 GitHub Action Oficial: Bloqueo automatico de Pull Requests.
 Dashboard SaaS: Visualizacion de metricas de seguridad para CISOs.
 Reglas Custom: Permitir a las empresas definir sus propias heuristicas de bloqueo.
-
 Licencia
 MIT - Libre uso para la comunidad. Para implementaciones Enterprise y soporte, contacta al autor.
+
+text
+
+
+Confirma cuando el archivo haya sido escrito."
