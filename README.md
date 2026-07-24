@@ -1,5 +1,3 @@
-"Actúa como un Arquitecto de Software. Necesito que crees o sobrescribas el archivo README.md en la raíz del proyecto con el siguiente contenido exacto. No añadas ni quites nada, respeta el formato Markdown:
-
 SafeVibe CLI
 Codigo que compila no es codigo seguro.
 
